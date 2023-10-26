@@ -4,3 +4,8 @@ results/
 *.csv
 .DS_Store
 __pycache__
+emnlp2017-bilstm-cnn-crf/data/
+*.xlsx
+*.ann
+*.txt
+
