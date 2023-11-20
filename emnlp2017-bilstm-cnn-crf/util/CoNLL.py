@@ -1,3 +1,8 @@
+"""
+Changes: readCoNLL function uses `splits = line.split("\t")` instead of `splits = line.split()`. 
+This is because our annotation data has blanks in the "section" column 
+"""
+
 from __future__ import print_function
 import os
 
@@ -43,7 +48,7 @@ def readCoNLL(inputPath, cols, commentSymbol=None, valTransformation=None):
                 newData = False
             continue
         
-        splits = line.split()
+        splits = line.split("\t")
         for colIdx, colName in cols.items():
             val = splits[colIdx]
             
