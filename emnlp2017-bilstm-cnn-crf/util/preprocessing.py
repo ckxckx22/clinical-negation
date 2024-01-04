@@ -1,3 +1,5 @@
+## Changes: add to the prepareDataset function a parameter 'forceNew' to force to create a new embedding 
+# even though a plk file is existing. default value is False. 
 from __future__ import (division, absolute_import, print_function, unicode_literals)
 import os
 import numpy as np
@@ -17,7 +19,8 @@ else: #Python 2.7 imports
     import cPickle as pkl
     from io import open
 
-def perpareDataset(embeddingsPath, datasets, frequencyThresholdUnknownTokens=50, reducePretrainedEmbeddings=False, valTransformations=None, padOneTokenSentence=True):
+def perpareDataset(embeddingsPath, datasets, frequencyThresholdUnknownTokens=50, 
+                   reducePretrainedEmbeddings=False, valTransformations=None, padOneTokenSentence=True, forceNew=False):
     """
     Reads in the pre-trained embeddings (in text format) from embeddingsPath and prepares those to be used with the LSTM network.
     Unknown words in the trainDataPath-file are added, if they appear at least frequencyThresholdUnknownTokens times
@@ -34,7 +37,7 @@ def perpareDataset(embeddingsPath, datasets, frequencyThresholdUnknownTokens=50,
     pklName = "_".join(sorted(datasets.keys()) + [embeddingsName])
     outputPath = 'pkl/' + pklName + '.pkl'
 
-    if os.path.isfile(outputPath):
+    if os.path.isfile(outputPath) and not forceNew:
         logging.info("Using existent pickle file: %s" % outputPath)
         return outputPath
 
