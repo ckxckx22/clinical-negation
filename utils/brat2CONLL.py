@@ -1,9 +1,9 @@
 # This script transforms brat annotations to CONLL format.
 # The target BIO-format labels represents assertion status
 # the resulting output will not remove punctuations or white spaces.
-# This script takes two or three arg from command line: data_directory, output_directory, (filename)
+# This script takes two or three arguments from command line: data_directory, output_directory, (filename)
 
-# Output format: Token, begin_offset, end_offset, section_type, file_name, assertion_status
+# Output format: Token, begin_offset, end_offset, section_type, file_name, label (i.e. assertion_status)
 
 # Example output
 # ulcerative	520	530	Present illness	0001.txt	B-present
@@ -20,6 +20,10 @@
 # the	588	591	Present illness	0001.txt	O
 # morning	592	599	Present illness	0001.txt	O
 
+# Note that this script uses py3.8. Using py3.9 may cause issues with TreebankWordTokenizer().span_tokenize(text)
+# To use this scripts for other purposes than "Assertion status", check and modify accordingly all codes commented as
+# "#FILTER"
+
 
 import json
 import re
@@ -35,7 +39,8 @@ import warnings
 from nltk.tokenize.punkt import PunktSentenceTokenizer
 from nltk.tokenize import TreebankWordTokenizer
 
-ASSERTION_TYPES = ["present", "absent", "possible", "conditional", "hypothetical", "associated_with_someone_else"]
+
+ALL_UNIQUE_LABELS = ["present", "absent", "possible", "conditional", "hypothetical", "associated_with_someone_else"]
 DEFAULT_DATA_DIR = r'/Users/chenkx/Box Sync/NLP group/2010 i2b2 challenge - rel/train'
 DEFAULT_OUTPUT_DIR = os.path.join(DEFAULT_DATA_DIR, "CONLL")
 DEFAULT_MAP_DIR = "/Users/chenkx/git/clinical-negation/notebooks/2010Corpus/section_mapping_v4_all.csv"
@@ -45,6 +50,9 @@ HEADER_PATTERN = "(?<=\n)[a-zA-Z -]+(?=[ ]:[\n| ])"
 
 
 def get_dir():
+    """
+    return input_data_dir, output_data_dir, [file_name]
+    """
     input_data_dir: str
     output_data_dir: str
     fname: Optional[str] = None
@@ -68,12 +76,13 @@ def get_dir():
     return input_data_dir, output_data_dir, fname
 
 
-class ResultToken:
+class Token:
     """
+    TreebankWordTokenizer is used to split span into tokens
     Note: white space will not be trimmed
     """
 
-    def __init__(self, begin: int, end: int, assertion: str,
+    def __init__(self, begin: int, end: int, label: str,
                  token: Optional[str] = None, section: str = "N/A", raw_note: Optional[str] = None):
         self.token: Optional[str] = None
         if token:
@@ -82,33 +91,33 @@ class ResultToken:
             self.token = raw_note[begin: end]
         self.b: int = begin
         self.e: int = end
-        self.asst: str = assertion
-        ResultToken.validate_assertion_type(assertion)
+        self.label: str = label
+        Token.validate_IBOlabel(label)
         self.sec: str = section
 
     def change_section_to(self, section: str):
         self.sec = section
 
-    def change_assertion_to(self, new: str):
-        self.asst = new
-        ResultToken.validate_assertion_type(new)
+    def change_label_to(self, new: str):
+        self.label = new
+        Token.validate_IBOlabel(new)
 
     @staticmethod
-    def validate_assertion_type(assertion_type):
+    def validate_IBOlabel(label):
         """
-        assertion_type must be IBO-encoded and be one of ASSERTION_TYPES
+        label must be IBO-encoded and be one of ALL_UNIQUE_LABELS
         """
-        assert assertion_type.startswith("I-") or assertion_type.startswith("B-") or assertion_type == "O"
-        if assertion_type != "O" and assertion_type[2:] not in ASSERTION_TYPES:
-            warnings.warn(f"{file_name}: Unknown assertion type: {assertion_type}")
+        assert label.startswith("I-") or label.startswith("B-") or label == "O"
+        if label != "O" and label[2:] not in ALL_UNIQUE_LABELS:
+            warnings.warn(f"{file_name}: Unknown label type: {label}")
 
     @staticmethod
     def sentence_end():
         """
         A placeholder to represent a "sentence end". When printing to CONLL format, will create an empty line.
-        :return: an empty ResultToken
+        :return: an empty Token
         """
-        return ResultToken(-1, -1, "O")
+        return Token(-1, -1, "O")
 
     def is_sentence_end(self) -> bool:
         if self.b == -1 and self.e == -1:
@@ -119,35 +128,38 @@ class ResultToken:
         if self.is_sentence_end():
             return ""
         else:
-            if "" in [self.token, str(self.b), str(self.e), self.sec, fname, self.asst]:
+            if "" in [self.token, str(self.b), str(self.e), self.sec, fname, self.label]:
                 warnings.warn("wrong")
-                print([self.token, str(self.b), str(self.e), self.sec, fname, self.asst])
-            return "\t".join([self.token, str(self.b), str(self.e), self.sec, fname, self.asst])
+                print([self.token, str(self.b), str(self.e), self.sec, fname, self.label])
+            return "\t".join([self.token, str(self.b), str(self.e), self.sec, fname, self.label])
 
 
 class Span:
-    def __init__(self, begin: int, end: int, assertion_type: str, section: str = "N/A"):
+    """
+    A span of text. A span is NOT a sentence!
+    """
+    def __init__(self, begin: int, end: int, label: str, section: str = "N/A"):
         self.b: int = begin
         self.e: int = end  # exclusive indexing
-        self.asst: Optional[str] = assertion_type
+        self.label: Optional[str] = label
         self.sec: str = section
 
-    def tokenize(self, note: str) -> List[ResultToken]:
+    def tokenize(self, note: str) -> List[Token]:
         """
         Tokenize a span.
         :return tokens sorted by beginning offsets.
         """
         text: str = note[self.b: self.e]
-        asst: str = "O"
-        # BIO format: add "I-" prefix
-        if self.asst != "O":
-            asst = "I-" + self.asst
-        tokens: List[ResultToken] = [ResultToken(b + self.b, e + self.b, asst, raw_note=note)
-                                     for b, e in TreebankWordTokenizer().span_tokenize(text)]
+        bio_label: str = "O"
+        # BIO format: add an "I-" prefix for all tokens. (later will change it for the first token to "B-")
+        if self.label != "O":
+            bio_label = "I-" + self.label
+        tokens: List[Token] = [Token(b + self.b, e + self.b, bio_label, raw_note=note)
+                               for b, e in TreebankWordTokenizer().span_tokenize(text)]
         tokens.sort(key=lambda x: x.b)
         # BIO format: for the first token, add "B-" prefix
-        if self.asst != "O":
-            tokens[0].change_assertion_to("B-" + self.asst)
+        if self.label != "O":
+            tokens[0].change_label_to("B-" + self.label)
         return tokens
 
 
@@ -156,7 +168,7 @@ def read_and_parse(file: str, data_dir: str) -> Tuple[str, List[Span]]:
     Parse brat annotations (.ann) and the corresponding raw texts
     :param file
     :param data_dir
-    :return:
+    :return: raw_text, Concepts
     """
 
     def read_annotation_note(file: str, data_dir: str) -> Tuple[str, str]:
@@ -174,33 +186,43 @@ def read_and_parse(file: str, data_dir: str) -> Tuple[str, List[Span]]:
 
     def parse_annotation(raw_annotation: str) -> List[Span]:
         """
-        Parse .ann format string to get key info such as offsets and assertion type of concepts
+        Parse .ann format string to get key info such as offsets and labels (e.g. assertion type) of concepts
         :param raw_annotation: raw annotations (.ann format)
         :return:
         """
-        split_raw_annotations: List[str] = raw_annotation.split('\n')
+        raw_annotation_lines: List[str] = raw_annotation.split('\n')
         concepts_with_id: Dict[str:Span] = {}
-        for raw_line in split_raw_annotations:
+
+        # find all annotations of "problem"
+        for raw_line in raw_annotation_lines:
             line: List[str] = raw_line.split('\t')
             if line[0].startswith('T'):
                 # only concepts of "problem" have assertion status
-                if line[1].split()[0] != "problem":
+                if line[1].split()[0] != "problem":  #FILTER
                     continue
-                concepts_with_id[line[0]] = Span(int(line[1].split()[1]),
-                                                 int(line[1].split()[2]),
-                                                 "O")
-        for raw_line in split_raw_annotations:
+                concepts_with_id[line[0]] = Span(int(line[1].split()[1]),  # start offset
+                                                 int(line[1].split()[2]),  # end offset
+                                                 "placeholder")  # label
+        # find all annotations of labels (i.e. assertion_status)
+        for raw_line in raw_annotation_lines:
             line: List[str] = raw_line.split('\t')
             if line[0].startswith('A'):
-                if line[1].split()[1] not in concepts_with_id:
+                concept_id: str = line[1].split()[1]
+                if concept_id not in concepts_with_id:
                     print(f"Warning: {line[0]} ??")
-                concepts_with_id[line[1].split()[1]].asst = line[1].split()[0]
+                concepts_with_id[concept_id].label = line[1].split()[0]
 
-        return list(concepts_with_id.values())
+        # Check whether the label "placeholder" of every concept has been updated.
+        concepts: List[Span] = list(concepts_with_id.values())
+        for c in concepts:
+            if c.label == "placeholder":
+                warnings.warn("The label for a concept is not specified. begin= {c.b}, end = {c.e}")
+                c.label = "O"  # Mark this annotation as a non-concept
+
+        return concepts
 
     text, annotations = read_annotation_note(file, data_dir)
-    concpts: List[Span] = parse_annotation(annotations)
-    return text, concpts
+    return text, parse_annotation(annotations)
 
 
 def spans_not_overlapping(spans: List[Span]) -> bool:
@@ -217,28 +239,35 @@ def spans_not_overlapping(spans: List[Span]) -> bool:
     return True
 
 
+def regex_section_finder(raw_note: str) -> Dict[int, str]:
+    """
+    Find section headers from a note using regex and a map to normalize the found headings
+    """
+    # get all headings
+    all_headings: Dict[int, str] = {}  # {begin_offset: heading}
+    # an iterator yielding match objects over all non-overlapping matches
+    matches: Iterator[Match[str]] = re.finditer(HEADER_PATTERN, raw_note)  # TODO: ADD PARENTHESIS HERE
+    for m in matches:
+        match: Optional[str] = SectionFinder.std_header(m.group(0))
+        if match:
+            b, e = m.span()
+            all_headings[b] = match
+    if len(all_headings) == 0:
+        warnings.warn("%s: No sections identified using regex." % file_name)
+    return all_headings
+
+
 class SectionFinder:
     """
-    Identify a span's section type. One SectionFinder should be created for each new notes.
+    Identify a span's section type. One SectionFinder is created for each note.
     """
     def __init__(self, raw_note: str):
-        # get all headings
-        self.all_headings: Dict[int: str] = {}  # {begin: match}
-        # an iterator yielding match objects over all non-overlapping matches
-        matches: Iterator[Match[str]] = re.finditer(HEADER_PATTERN, raw_note)  # TODO: ADD PARENTHESIS HERE
-        for m in matches:
-            match: Optional[str] = SectionFinder.std_header(m.group(0))
-            if match:
-                b, e = m.span()
-                self.all_headings[b] = match
+        # all headings and their beginning offsets
+        self.all_headings: Dict[int: str]
+        # find sections using regex
+        self.all_headings = regex_section_finder(raw_note)
 
-        # the beginning offsets of all sections
-        self.section_beginnings: List[int] = list(self.all_headings.keys())
-        self.section_beginnings.sort()
-        if not self.section_beginnings:
-            warnings.warn("%s: No sections identified using regex." % file_name)
-
-    def get_section_type(self, span: Optional[Span] = None, token: Optional[ResultToken] = None) -> str:
+    def get_section_type(self, span: Optional[Span] = None, token: Optional[Token] = None) -> str:
         """
         provide either a span or a token to get its section type
         """
@@ -246,20 +275,24 @@ class SectionFinder:
             warnings.warn("%s: Provide value to get section type!" % file_name)
             return ""
 
-        if not self.section_beginnings:
+        if len(self.all_headings) == 0:
             return 'Unknown/Unclassified'
+
+        # the beginning offsets of all sections
+        section_beginnings: List[int] = list(self.all_headings.keys())
+        section_beginnings.sort()
 
         begin: int
         if span:
             begin = span.b
         else:
             begin = token.b
-        idx: int = bisect_left(self.section_beginnings, begin) - 1
+        idx: int = bisect_left(section_beginnings, begin) - 1
         section: str
         if idx == -1:
             section = 'Unknown/Unclassified'
         else:
-            section = self.all_headings[self.section_beginnings[idx]]
+            section = self.all_headings[section_beginnings[idx]]
         if section is None or section == "":
             warnings.warn("Section not found!!")
         return section
@@ -310,16 +343,30 @@ class SectionFinder:
         return result
 
 
-def tokenize_and_classify_section(span: Span, note: str, section_findr: SectionFinder) -> List[ResultToken]:
-    tokens: List[ResultToken] = span.tokenize(note)
+def tokenize_and_classify_section(span: Span, note: str, section_finder: SectionFinder) -> List[Token]:
+    tokens: List[Token] = span.tokenize(note)
     for tk in tokens:
         if tk.is_sentence_end():
             continue
-        tk.change_section_to(section_findr.get_section_type(token=tk))
+        tk.change_section_to(section_finder.get_section_type(token=tk))
     return tokens
 
 
-def run() -> None:
+def run(filename: str) -> None:
+    """
+    How it works:
+    For each note,
+    1. Parse annotations and the raw text to get the offsets and label for the concepts
+    2. Identify sections using regex
+    3. Slice the raw text into spans (i.e. span - concept - span - ...). Assign a label of "O" to all non-concepts
+    4. Identify sentences: Add empty tokens to indicate end of sentences.
+    5. Convert all tokens to CoNLL lines.
+    """
+    if filename not in wanted:
+        return
+
+    print(filename)
+
     raw_text, concepts = read_and_parse(filename, input_dir)
     # move on to next note if no annotations
     if not concepts:
@@ -348,7 +395,7 @@ def run() -> None:
         all_spans.append(Span(previous_span_start, len(raw_text), "O"))
 
     # Annotate each token in each span. Use a Deque instead of List because the need of popleft() later
-    all_tokens: Deque['ResultToken'] = deque([])
+    all_tokens: Deque['Token'] = deque([])
     for sp in all_spans:
         # all_tokens.extend(sp.tokenize(raw_text)) # if not want section information
         all_tokens.extend(tokenize_and_classify_section(sp, raw_text, section_finder))
@@ -358,24 +405,24 @@ def run() -> None:
     # find all tokens within each sentence
     all_tokens_with_sentence_endings = []
     # Assume the ending offset of the current sentence = the beginning offset of the following sentence - 1,
-    # get rid of the first sentence. Will start from the second sentence
+    # skip the first sentence. Will start from the second sentence
     for sent in sentences[1:]:
         ending_index: int = sent[1] - 1
         while all_tokens and all_tokens[0].b <= ending_index:
             current_token = all_tokens.popleft()
             all_tokens_with_sentence_endings.append(current_token)
-        all_tokens_with_sentence_endings.append(ResultToken.sentence_end())
+        all_tokens_with_sentence_endings.append(Token.sentence_end())
     # add the rest of tokens to the resulting list if any
     if all_tokens:
         all_tokens_with_sentence_endings.extend(list(all_tokens))
-        all_tokens_with_sentence_endings.append(ResultToken.sentence_end())
+        all_tokens_with_sentence_endings.append(Token.sentence_end())
 
     lines: List[str] = \
         [tk.to_conll_line(fname=filename + ".txt") + "\n" for tk in all_tokens_with_sentence_endings]
     with open(os.path.join(output_dir, filename + ".txt"), "w") as f_to_write:
         f_to_write.writelines(lines)
 
-    # write all data to one test file if needed
+    # write all into one file
     LOCK.acquire()
     one_file.extend(lines)
     LOCK.release()
@@ -387,7 +434,7 @@ if __name__ == '__main__':
     file_name: Optional[str]
     filenames: List[str]
     input_dir, output_dir, file_name = get_dir()
-    # file_name = "0001"
+    # file_name = "record-84"
     if file_name is None:
         filenames = [x[:-4] for x in os.listdir(os.path.join(input_dir, "txt")) if x.endswith(".txt")]
         if not filenames:
@@ -396,19 +443,26 @@ if __name__ == '__main__':
     else:
         filenames = [file_name]
 
-    # write all data to one test file if needed
+    with open(r"/Users/chenkx/Box Sync/NLP group/2010 i2b2 challenge - rel/dev_split_threeway.txt") as f:
+        wanted: List[str] = [i.strip()[:-4] for i in f.readlines()]
+
+    print(wanted)
+
+    output_dir = r"/Users/chenkx/Box Sync/NLP group/2010 i2b2 challenge - rel/threeway_CoNLL"
+
+    # write all data to one test file
     one_file: List[str] = []
     LOCK = threading.Lock()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         futures = []
         for filename in filenames:
-            futures.append(executor.submit(run))
+            futures.append(executor.submit(run, filename))
         for f in futures:
             f.result()
 
     # write all to one file
-    with open(os.path.join(output_dir, "one_file.txt"), "w") as f:
+    with open(os.path.join(output_dir, "conll_in_one_file.txt"), "w") as f:
         f.writelines([s for s in one_file])
 
     print(f"Found {len(filenames)} notes in: {input_dir}. \nConverted them to CONLL and saved to: \"{output_dir}\"")
