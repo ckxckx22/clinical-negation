@@ -3,6 +3,8 @@ A bidirectional LSTM with optional CRF and character-based presentation for NLP 
 
 Author: Nils Reimers
 License: Apache-2.0
+
+Change1: Set the default early stopping value from 5 to 200 to prevent automatic early stopping.
 """
 
 from __future__ import print_function
@@ -39,7 +41,7 @@ class BiLSTM:
                          'optimizer': 'adam',
                          'charEmbeddings': None, 'charEmbeddingsSize': 30, 'charFilterSize': 30, 'charFilterLength': 3, 'charLSTMSize': 25, 'maxCharLength': 25,
                          'useTaskIdentifier': False, 'clipvalue': 0, 'clipnorm': 1,
-                         'earlyStopping': 5, 'miniBatchSize': 32,
+                         'earlyStopping': 200, 'miniBatchSize': 32,
                          'featureNames': ['tokens', 'casing'], 'addFeatureDimensions': 10}
         if params != None:
             defaultParams.update(params)
