@@ -515,6 +515,12 @@ class BiLSTM:
         
         
     def computeF1(self, modelName, sentences):
+        """
+        First, make sure the labeling schema is "BIO", i.e. always use "B-" to label the first token
+        If correctBIOErrors="O", correct starting "I-..." to "O". 
+        If correctBIOErrors="B", correct starting "I-..." to "B-...". 
+        Try both approaches and choose the one that result in a higher F1, 
+        """
         labelKey = self.labelKeys[modelName]
         model = self.models[modelName]
         idx2Label = self.idx2Labels[modelName]
