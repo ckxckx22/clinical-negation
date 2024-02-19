@@ -323,20 +323,21 @@ def section_filter(sentences, level):
     """
     This function filters sentences read from the CoNLL files based on its section type (i.e. the 4th col). 
     For the negation task, the percentage of negated concepts vary among different sections. 
-    I did an analysis based on the three-way and two-way train datasets and categorized section types into three groups:  
-        highly negated: > 5% of its concepts are negated 
-        moderately negated: (1%, 5%] concepts are negated
-        lowly negated: <= 1% concepts are negated 
+    I did an analysis based on the three-way and two-way train datasets and categorized section types into three groups: 
+    (Chen et al., Clinical Sections’ Impact on Model Performance of Different Clinical NLP Tasks, 2023) 
+        highly negated: > 40% concepts are negated, i.e. Physical examination/Status, Review of systems, Allergies
+        moderately negated: 
+        lowly negated: all others 
     It seemed that test set has its unique section types, and the distribution of these types should be unkonwn. 
     I assume those unknown section types are udner the lowly_negated category. 
     :param sentences - output of CoNLL.readCoNLL() function 
     :param level - "high", "moderate", "low"
     """
-    # Not included: Immunizations, Consultations, Plan, Complications, Advance directive/Code
-    highly_negated = ["Physical examination/Status"]
-    moderately_negated = ["Patient information/Demographics", "Present illness", "Hospital course"]
-    lowly_negated = ["Social history", "Family history", "Addendum", "Radiology", "Unknown/Unclassified", "Problems", "Reasons/Indications",
-                     "Procedures/Surgery", "Chief complaint", "Nutrition", "Past history", "Assessment", "Review of systems", "Diagnoses", 
+    # Not included: Immunizations, Consultations, Plan, Advance directive/Code
+    highly_negated = ["Physical examination/Status", "Review of systems", "Allergies", "Complications"]
+    moderately_negated = []
+    lowly_negated = ["Patient information/Demographics", "Present illness", "Hospital course", "Social history", "Family history", "Addendum", "Radiology", "Unknown/Unclassified", "Problems", "Reasons/Indications",
+                     "Procedures/Surgery", "Chief complaint", "Nutrition", "Past history", "Assessment", "Diagnoses", 
                      "Laboratory tests", "Follow-up/Instructions", "Assessment/Plan", "Allergies", "Medications", "Investigations/Results"]
     wanted = None
 
@@ -349,6 +350,8 @@ def section_filter(sentences, level):
     elif level == "high":
         wanted = highly_negated
         unwanted = lowly_negated + moderately_negated
+    elif level is None: 
+        return sentences
     else:
         print("WRONG SECTION FILTER! Keep everything.")
         return sentences

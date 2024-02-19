@@ -25,7 +25,7 @@ from util.preprocessing import perpareDataset, loadDatasetPickle
 from keras import backend as K
 
 
-def train_negation(name, columns, force_create_new_embedding, optimizer): 
+def train_negation(name, columns, force_create_new_embedding, optimizer, section_filter_level): 
     # :: Change into the working dir of the script ::
     abspath = os.path.abspath(__file__)
     dname = os.path.dirname(abspath)
@@ -60,7 +60,7 @@ def train_negation(name, columns, force_create_new_embedding, optimizer):
     embeddingsPath = 'komninos_english_embeddings.gz'
 
     # :: Prepares the dataset to be used with the LSTM-network. Creates and stores cPickle files in the pkl/ folder ::
-    pickleFile = perpareDataset(embeddingsPath, datasets, forceNew=force_create_new_embedding)
+    pickleFile = perpareDataset(embeddingsPath, datasets, forceNew=force_create_new_embedding, section_filter_level=section_filter_level)
 
 
     ######################################################
@@ -93,16 +93,47 @@ def train_negation(name, columns, force_create_new_embedding, optimizer):
 cols_no_section = {0:'tokens', 5:'Assertion_BIO'}
 cols_with_section = {0:'tokens', 3: 'section', 5:'Assertion_BIO'}
 
-train_negation(name = 'one-model-with-section-adam', 
+print("\n\n============================\n No sections - nadam\n============================\n")
+train_negation(name = 'no-section-nadam', 
+               columns = cols_no_section, 
+               force_create_new_embedding = True, 
+               optimizer = 'nadam',
+               section_filter_level = None)
+
+print("\n\n============================\n No sections - adadelta\n============================\n")
+train_negation(name = 'no-section-adadelta', 
+               columns = cols_no_section, 
+               force_create_new_embedding = False, 
+               optimizer = 'adadelta',
+               section_filter_level = None)
+
+print("\n\n============================\n No sections - adagrad\n============================\n")
+train_negation(name = 'no-section-adagrad', 
+               columns = cols_no_section, 
+               force_create_new_embedding = False, 
+               optimizer = 'adagrad',
+               section_filter_level = None)
+
+print("\n\n============================\n No sections - nadam\n============================\n")
+train_negation(name = 'one-model-with-section-nadam', 
                columns = cols_with_section, 
                force_create_new_embedding = True, 
-               optimizer = 'adam')
+               optimizer = 'nadam',
+               section_filter_level = None)
 
-# train_negation(name = 'no_section_adam', 
-#                columns = cols_with_section, 
-#                force_create_new_embedding = True, 
-#                optimizer = 'adam')
+print("\n\n============================\n No sections - adadelta\n============================\n")
+train_negation(name = 'one-model-with-section-adadelta', 
+               columns = cols_with_section, 
+               force_create_new_embedding = False, 
+               optimizer = 'adadelta',
+               section_filter_level = None)
 
+print("\n\n============================\n No sections - adagrad\n============================\n")
+train_negation(name = 'one-model-with-section-adagrad', 
+               columns = cols_with_section, 
+               force_create_new_embedding = False, 
+               optimizer = 'adagrad',
+               section_filter_level = None)
 
 
 
