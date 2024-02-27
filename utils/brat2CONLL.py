@@ -419,8 +419,8 @@ def run(filename: str) -> None:
 
     lines: List[str] = \
         [tk.to_conll_line(fname=filename + ".txt") + "\n" for tk in all_tokens_with_sentence_endings]
-    with open(os.path.join(output_dir, filename + ".txt"), "w") as f_to_write:
-        f_to_write.writelines(lines)
+    # with open(os.path.join(output_dir, filename + ".txt"), "w") as f_to_write:
+    #     f_to_write.writelines(lines)
 
     # write all into one file
     LOCK.acquire()
@@ -462,7 +462,7 @@ if __name__ == '__main__':
             f.result()
 
     # write all to one file
-    with open(os.path.join(output_dir, "conll_in_one_file.txt"), "w") as f:
-        f.writelines([s for s in one_file])
+    # with open(os.path.join(output_dir, "conll_in_one_file.txt"), "w") as f:
+    #     f.writelines([s for s in one_file])
 
     print(f"Found {len(filenames)} notes in: {input_dir}. \nConverted them to CONLL and saved to: \"{output_dir}\"")
