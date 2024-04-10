@@ -1,3 +1,13 @@
+"""
+Generate a lowly-negated and a highly-negated subset:
+Split the dataset into highly-negated sentences and lowly-negated sentences based on their sections.
+Sentences that belong to one of the Physical examination/Status, RoS, Allergies, Complications sections are highly-negated.
+
+Downsample:
+Extract ~10% sentences from the full dataset or the lowly_negated dataset to form the downsample set.
+"""
+
+
 import pandas as pd
 import random
 
@@ -28,7 +38,7 @@ def write(df):
 
 
 if __name__ == "__main__":
-    which_set = "train"
+    which_set = "test"
     DATA_DIR = "/Users/chenkx/git/clinical-negation/emnlp2017-bilstm-cnn-crf/data/i2b2_2010/real/%s.txt" % which_set
     highly_negated = ["Physical examination/Status", "Review of systems", "Allergies", "Complications"]
     # lowly_negated = ["Patient information/Demographics", "Present illness", "Hospital course", "Social history",
@@ -54,6 +64,7 @@ if __name__ == "__main__":
     # down-sample the lowly_negated subset to 10%
     random.seed(10)
     to_keep = random.sample(low_subset.row_id[low_subset.begin.isna()].to_list(), sum(high_subset.begin.isna()))
+    print(sorted(to_keep))
     downsampled = low_subset.copy()
     # downsampled = raw.copy()
     downsampled["keep"] = None
@@ -65,8 +76,10 @@ if __name__ == "__main__":
              sum(high_subset.begin.isna()), sum(low_subset.begin.isna())))
     print("After downsampling, ratio of the number of tokens in the highly-negated subset and the low_subset set: %.4f(%d/%d)"
           % (downsampled.keep.sum() / len(high_subset), downsampled.keep.sum(), len(high_subset)))
+    # print("NA? %d" % sum(downsampled.keep.isna()))
+    # print(downsampled[downsampled.keep.isna()])
 
-    downsampled = downsampled[downsampled.keep]
+    # downsampled = downsampled[(downsampled.keep & ~downsampled.keep.isna())]
 
     # with open("/Users/chenkx/git/clinical-negation/emnlp2017-bilstm-cnn-crf/data/i2b2_2010_downsample-lowly_negated/%s.txt" % which_set, "w") as f:
     #     f.write(write(downsampled))
