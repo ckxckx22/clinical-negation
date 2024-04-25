@@ -543,14 +543,29 @@ class BiLSTM:
     def computeAcc(self, modelName, sentences):
         correctLabels = [sentences[idx][self.labelKeys[modelName]] for idx in range(len(sentences))]
         predLabels = self.predictLabels(self.models[modelName], sentences) 
+        idx2Label = self.idx2Labels[modelName] 
         
+        # Excluding "O" in computation
         numLabels = 0
         numCorrLabels = 0
         for sentenceId in range(len(correctLabels)):
             for tokenId in range(len(correctLabels[sentenceId])):
+                if idx2Label[correctLabels[sentenceId][tokenId]] == "N/A":
+                    continue
                 numLabels += 1
                 if correctLabels[sentenceId][tokenId] == predLabels[sentenceId][tokenId]:
                     numCorrLabels += 1
+        print("Accuracy (excluding 'O'): %.4f(%d/%d)" % (numCorrLabels/float(numLabels), numCorrLabels, numLabels))
+
+        # # Including "O" in computation 
+        # numLabels = 0
+        # numCorrLabels = 0
+        # for sentenceId in range(len(correctLabels)):
+        #     for tokenId in range(len(correctLabels[sentenceId])):
+        #         numLabels += 1
+        #         if correctLabels[sentenceId][tokenId] == predLabels[sentenceId][tokenId]:
+        #             numCorrLabels += 1
+        # print("Accuracy: %.4f(%d/%d)" % (numCorrLabels/float(numLabels), numCorrLabels, numLabels))
 
   
         return numCorrLabels/float(numLabels)
