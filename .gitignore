@@ -6,5 +6,5 @@ results/
 __pycache__
 *.xlsx
 *.ann
-
+**/.idea/
 

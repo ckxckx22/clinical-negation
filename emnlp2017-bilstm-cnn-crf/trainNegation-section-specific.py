@@ -24,7 +24,7 @@ from util.preprocessing import perpareDataset, loadDatasetPickle
 from keras import backend as K
 
 
-def train_negation(name, columns, force_create_new_embedding, optimizer, section_filter_level): 
+def train_negation(name, columns, force_create_new_embedding, optimizer, section_filter_level, dataset="i2b2_2010"): 
     # :: Change into the working dir of the script ::
     abspath = os.path.abspath(__file__)
     dname = os.path.dirname(abspath)
@@ -48,7 +48,7 @@ def train_negation(name, columns, force_create_new_embedding, optimizer, section
     #
     ######################################################
     datasets = {
-        'i2b2_2010':                            #Name of the dataset
+        dataset:                            #Name of the dataset
             {'columns': columns,   #CoNLL format for the input data. Column 1 contains tokens, column 3 contains POS information
             'label': 'Assertion',                     #Which column we like to predict
             'evaluate': True,                   #Should we evaluate on this task? Set true always for single task setups
@@ -79,7 +79,7 @@ def train_negation(name, columns, force_create_new_embedding, optimizer, section
     model = BiLSTM(params)
     model.setMappings(mappings, embeddings)
     model.setDataset(datasets, data)
-    model.storeResults('results/' + name + '_i2b2_2010.csv') #Path to store performance scores for dev / test
+    model.storeResults('results/%s_%s.csv' % (name, dataset)) #Path to store performance scores for dev / test
     model.modelSavePath = "/scratch/kexin/clinical_negation/LSTMmodels/"+ name + "_[ModelName]_[DevScore]_[TestScore]_[Epoch].h5"
     model.fit(epochs=35)
 
@@ -92,30 +92,67 @@ def train_negation(name, columns, force_create_new_embedding, optimizer, section
 cols_no_section = {0:'tokens', 5:'concept', 6:'Assertion'}
 cols_with_section = {0:'tokens', 3: 'section', 5:'concept', 6:'Assertion'}
 
-print("\n\n============================\n base \n============================\n")
-train_negation(name = 'base-adam', 
-               columns = cols_no_section, 
-               force_create_new_embedding = True, 
-               optimizer = 'adam',
-               section_filter_level = None)
+# print("\n\n============================\n NOT including sections \n============================\n")
+# train_negation(name = 'adam', 
+#                columns = cols_no_section, 
+#                force_create_new_embedding = True, 
+#                optimizer = 'adam',
+#                section_filter_level = None,
+#                dataset="i2b2_2010_highly_negated")
 
-# print("\n\n============================\n section adam \n============================\n")
-# train_negation(name = 'section-adam', 
+# print("\n\n============================\n Including sections \n============================\n")
+# train_negation(name = 'specific-sections-adam', 
 #                columns = cols_with_section, 
 #                force_create_new_embedding = True, 
 #                optimizer = 'adam',
-#                section_filter_level = None)
+#                section_filter_level = None,
+#                dataset="i2b2_2010_highly_negated")
 
-print("\n\n============================\n specific for highly-negated sections \n============================\n")
-train_negation(name = 'highly-negated-adam', 
+# print("\n\n============================\n NOT including sections \n============================\n")
+# train_negation(name = 'no-section-adam', 
+#                columns = cols_no_section, 
+#                force_create_new_embedding = True, 
+#                optimizer = 'adam',
+#                section_filter_level = None,
+#                dataset="i2b2_2010_lowly_negated")
+
+print("\n\n============================\n base adam on the down-sampled test set \n============================\n")
+train_negation(name = 'no-section-adam', 
+               columns = cols_no_section, 
+               force_create_new_embedding = True, 
+               optimizer = 'adam',
+               section_filter_level = None,
+               dataset="i2b2_2010_downsample")
+
+
+print("\n\n============================\n base adam on the down-sampled subset of negated set \n============================\n")
+train_negation(name = 'no-section-adam', 
+               columns = cols_no_section, 
+               force_create_new_embedding = True, 
+               optimizer = 'adam',
+               section_filter_level = None,
+               dataset="i2b2_2010_downsample-lowly_negated")
+
+print("\n\n============================\n specifically-sections-adam (using section info) down-sampled test set \n============================\n")
+train_negation(name = 'specificly-sections-adam', 
                columns = cols_with_section, 
                force_create_new_embedding = True, 
                optimizer = 'adam',
-               section_filter_level = "high")
+               section_filter_level = None,
+               dataset="i2b2_2010_downsample")
 
-print("\n\n============================\n specific for lowly-negated sections \n============================\n")
-train_negation(name = 'lowly-negated-adam', 
+print("\n\n============================\n specifically-sections-adam (using section info) on the down-sampled subset of negated set \n============================\n")
+train_negation(name = 'specificly-sections-adam', 
                columns = cols_with_section, 
                force_create_new_embedding = True, 
                optimizer = 'adam',
-               section_filter_level = "low")
+               section_filter_level = None,
+               dataset="i2b2_2010_downsample-lowly_negated")
+
+print("\n\n============================\n specifically-sections-adam (using section info) on the whole lowly-negated set \n============================\n")
+train_negation(name = 'specificly-sections-adam', 
+               columns = cols_with_section, 
+               force_create_new_embedding = True, 
+               optimizer = 'adam',
+               section_filter_level = None,
+               dataset="i2b2_2010_lowly_negated")

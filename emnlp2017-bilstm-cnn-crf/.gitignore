@@ -3,6 +3,7 @@
 *~
 *.gz
 *.h5
+*.log
 
 .env
 .idea

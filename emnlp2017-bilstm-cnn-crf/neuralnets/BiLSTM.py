@@ -3,6 +3,8 @@ A bidirectional LSTM with optional CRF and character-based presentation for NLP 
 
 Author: Nils Reimers
 License: Apache-2.0
+
+Change1: Set the default early stopping value from 5 to 200 to prevent automatic early stopping.
 """
 
 from __future__ import print_function
@@ -39,7 +41,7 @@ class BiLSTM:
                          'optimizer': 'adam',
                          'charEmbeddings': None, 'charEmbeddingsSize': 30, 'charFilterSize': 30, 'charFilterLength': 3, 'charLSTMSize': 25, 'maxCharLength': 25,
                          'useTaskIdentifier': False, 'clipvalue': 0, 'clipnorm': 1,
-                         'earlyStopping': 5, 'miniBatchSize': 32,
+                         'earlyStopping': 200, 'miniBatchSize': 32,
                          'featureNames': ['tokens', 'casing'], 'addFeatureDimensions': 10}
         if params != None:
             defaultParams.update(params)
@@ -513,6 +515,12 @@ class BiLSTM:
         
         
     def computeF1(self, modelName, sentences):
+        """
+        First, make sure the labeling schema is "BIO", i.e. always use "B-" to label the first token
+        If correctBIOErrors="O", correct starting "I-..." to "O". 
+        If correctBIOErrors="B", correct starting "I-..." to "B-...". 
+        Try both approaches and choose the one that result in a higher F1, 
+        """
         labelKey = self.labelKeys[modelName]
         model = self.models[modelName]
         idx2Label = self.idx2Labels[modelName]
@@ -535,14 +543,29 @@ class BiLSTM:
     def computeAcc(self, modelName, sentences):
         correctLabels = [sentences[idx][self.labelKeys[modelName]] for idx in range(len(sentences))]
         predLabels = self.predictLabels(self.models[modelName], sentences) 
+        idx2Label = self.idx2Labels[modelName] 
         
+        # Excluding "O" in computation
         numLabels = 0
         numCorrLabels = 0
         for sentenceId in range(len(correctLabels)):
             for tokenId in range(len(correctLabels[sentenceId])):
+                if idx2Label[correctLabels[sentenceId][tokenId]] == "N/A":
+                    continue
                 numLabels += 1
                 if correctLabels[sentenceId][tokenId] == predLabels[sentenceId][tokenId]:
                     numCorrLabels += 1
+        print("Accuracy (excluding 'O'): %.4f(%d/%d)" % (numCorrLabels/float(numLabels), numCorrLabels, numLabels))
+
+        # # Including "O" in computation 
+        # numLabels = 0
+        # numCorrLabels = 0
+        # for sentenceId in range(len(correctLabels)):
+        #     for tokenId in range(len(correctLabels[sentenceId])):
+        #         numLabels += 1
+        #         if correctLabels[sentenceId][tokenId] == predLabels[sentenceId][tokenId]:
+        #             numCorrLabels += 1
+        # print("Accuracy: %.4f(%d/%d)" % (numCorrLabels/float(numLabels), numCorrLabels, numLabels))
 
   
         return numCorrLabels/float(numLabels)

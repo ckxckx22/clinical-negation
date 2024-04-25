@@ -1,3 +1,5 @@
+## Changes: add to the prepareDataset function a parameter 'forceNew' to force to create a new embedding 
+# even though a plk file is existing. default value is False. 
 from __future__ import (division, absolute_import, print_function, unicode_literals)
 import os
 import numpy as np
@@ -17,7 +19,9 @@ else: #Python 2.7 imports
     import cPickle as pkl
     from io import open
 
-def perpareDataset(embeddingsPath, datasets, frequencyThresholdUnknownTokens=50, reducePretrainedEmbeddings=False, valTransformations=None, padOneTokenSentence=True):
+def perpareDataset(embeddingsPath, datasets, frequencyThresholdUnknownTokens=50, 
+                   reducePretrainedEmbeddings=False, valTransformations=None, padOneTokenSentence=True, 
+                   forceNew=False, section_filter_level=None):
     """
     Reads in the pre-trained embeddings (in text format) from embeddingsPath and prepares those to be used with the LSTM network.
     Unknown words in the trainDataPath-file are added, if they appear at least frequencyThresholdUnknownTokens times
@@ -29,12 +33,14 @@ def perpareDataset(embeddingsPath, datasets, frequencyThresholdUnknownTokens=50,
         reducePretrainedEmbeddings: Set to true, then only the embeddings needed for training will be loaded
         valTransformations: Column specific value transformations
         padOneTokenSentence: True to pad one sentence tokens (needed for CRF classifier)
+        forceNew: True to force create a new embedding despite existing pickle file 
+        section_filter_level: For the assertion task, select "low", "moderate", or "high"
     """
     embeddingsName = os.path.splitext(embeddingsPath)[0]
     pklName = "_".join(sorted(datasets.keys()) + [embeddingsName])
     outputPath = 'pkl/' + pklName + '.pkl'
 
-    if os.path.isfile(outputPath):
+    if os.path.isfile(outputPath) and not forceNew:
         logging.info("Using existent pickle file: %s" % outputPath)
         return outputPath
 
@@ -54,7 +60,8 @@ def perpareDataset(embeddingsPath, datasets, frequencyThresholdUnknownTokens=50,
         paths = [trainData, devData, testData]
 
         logging.info(":: Transform "+datasetName+" dataset ::")
-        pklObjects['data'][datasetName] = createPklFiles(paths, mappings, datasetColumns, commentSymbol, valTransformations, padOneTokenSentence)
+        pklObjects['data'][datasetName] = createPklFiles(paths, mappings, datasetColumns, commentSymbol, 
+                                                         valTransformations, padOneTokenSentence, section_filter_level)
 
     
     f = open(outputPath, 'wb')
@@ -312,12 +319,72 @@ def createMatrices(sentences, mappings, padOneTokenSentence):
         
     return data
     
+
+def section_filter(sentences, level):
+    """
+    This function filters sentences read from the CoNLL files based on its section type (i.e. the 4th col). 
+    For the negation task, the percentage of negated concepts vary among different sections. 
+    I did an analysis based on the three-way and two-way train datasets and categorized section types into three groups: 
+    (Chen et al., Clinical Sections’ Impact on Model Performance of Different Clinical NLP Tasks, 2023) 
+        highly negated: > 40% concepts are negated, i.e. Physical examination/Status, Review of systems, Allergies
+        moderately negated: 
+        lowly negated: all others 
+    It seemed that test set has its unique section types, and the distribution of these types should be unkonwn. 
+    I assume those unknown section types are udner the lowly_negated category. 
+    :param sentences - output of CoNLL.readCoNLL() function 
+    :param level - "high", "moderate", "low"
+    """
+    # Not included: Immunizations, Consultations, Plan, Advance directive/Code
+    highly_negated = ["Physical examination/Status", "Review of systems", "Allergies", "Complications"]
+    moderately_negated = []
+    lowly_negated = ["Patient information/Demographics", "Present illness", "Hospital course", "Social history", "Family history", "Addendum", "Radiology", "Unknown/Unclassified", "Problems", "Reasons/Indications",
+                     "Procedures/Surgery", "Chief complaint", "Nutrition", "Past history", "Assessment", "Diagnoses", 
+                     "Laboratory tests", "Follow-up/Instructions", "Assessment/Plan", "Allergies", "Medications", "Investigations/Results"]
+    wanted = None
+
+    if level == "low":
+        wanted = lowly_negated
+        unwanted = highly_negated + moderately_negated
+    elif level == "moderate":
+        wanted = moderately_negated
+        unwanted = lowly_negated + highly_negated
+    elif level == "high":
+        wanted = highly_negated
+        unwanted = lowly_negated + moderately_negated
+    elif level is None: 
+        return sentences
+    else:
+        print("WRONG SECTION FILTER! Keep everything.")
+        return sentences
+    
+    wanted, unwanted = set(wanted), set(unwanted)
+    filtered_sentences = []
+    for sent in sentences:
+        to_keep = []  # idx of the tokens to keep
+        assert all([len(sent[col]) == len(sent['tokens']) for col in sent.keys()])
+        for i in range(len(sent["tokens"])):
+            if sent["section"][i] in wanted:
+                to_keep.append(i)
+            # else:
+            #     if sent["section"][i] not in unwanted:
+            #         print("WRONG SECTION FILTER! THE LIST IS INCOMPLETE!: " + sent["section"][i])
+        if to_keep:
+            new_sent = {col:[sent[col][i] for i in to_keep] for col in sent.keys()}
+            new_sent["section"] = ["N/A"] * len(new_sent["section"])    
+            filtered_sentences.append(new_sent)
+
+    return filtered_sentences
+
   
-  
-def createPklFiles(datasetFiles, mappings, cols, commentSymbol, valTransformation, padOneTokenSentence):
+def createPklFiles(datasetFiles, mappings, cols, commentSymbol, valTransformation, padOneTokenSentence, filter_section_level=None):
     trainSentences = readCoNLL(datasetFiles[0], cols, commentSymbol, valTransformation)
     devSentences = readCoNLL(datasetFiles[1], cols, commentSymbol, valTransformation)
     testSentences = readCoNLL(datasetFiles[2], cols, commentSymbol, valTransformation)    
+
+    if filter_section_level is not None:
+        trainSentences = section_filter(trainSentences, filter_section_level)
+        devSentences = section_filter(devSentences, filter_section_level)
+        testSentences = section_filter(testSentences, filter_section_level)
    
     extendMappings(mappings, trainSentences+devSentences+testSentences)
 

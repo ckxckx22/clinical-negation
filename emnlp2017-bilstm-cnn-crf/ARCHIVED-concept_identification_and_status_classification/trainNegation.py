@@ -1,3 +1,4 @@
+# Under development 
 # This script trains the BiLSTM-CRF architecture for token-level negation classification using the i2b2 2010 dataset
 # section labels are identified through regex 
 # The code use the embeddings by Komninos et al. (https://www.cs.york.ac.uk/nlp/extvec/)
@@ -50,7 +51,7 @@ def train_negation(name, columns, force_create_new_embedding, optimizer, section
     datasets = {
         'i2b2_2010':                            #Name of the dataset
             {'columns': columns,   #CoNLL format for the input data. Column 1 contains tokens, column 3 contains POS information
-            'label': 'Assertion',                     #Which column we like to predict
+            'label': 'Assertion_BIO',                     #Which column we like to predict
             'evaluate': True,                   #Should we evaluate on this task? Set true always for single task setups
             'commentSymbol': None}              #Lines in the input data starting with this string will be skipped. Can be used to skip comments
     }
@@ -73,15 +74,15 @@ def train_negation(name, columns, force_create_new_embedding, optimizer, section
     embeddings, mappings, data = loadDatasetPickle(pickleFile)
 
     # Some network hyperparameters
-    params = {'classifier': ['CRF'], 'LSTM-Size': [100, 100], 'dropout': (0.25, 0.25), 'earlyStopping': 10, 'optimizer': optimizer}
+    params = {'classifier': ['CRF'], 'LSTM-Size': [100, 100], 'dropout': (0.25, 0.25), 'earlyStopping': 5, 'optimizer': optimizer}
 
 
     model = BiLSTM(params)
     model.setMappings(mappings, embeddings)
     model.setDataset(datasets, data)
     model.storeResults('results/' + name + '_i2b2_2010.csv') #Path to store performance scores for dev / test
-    model.modelSavePath = "/scratch/kexin/clinical_negation/LSTMmodels/"+ name + "_[ModelName]_[DevScore]_[TestScore]_[Epoch].h5"
-    model.fit(epochs=35)
+    model.modelSavePath = "models/"+ name + "_[ModelName]_[DevScore]_[TestScore]_[Epoch].h5"
+    model.fit(epochs=25)
 
 
 ######################################################
@@ -89,33 +90,52 @@ def train_negation(name, columns, force_create_new_embedding, optimizer, section
 # Set parameters
 #
 ######################################################
-cols_no_section = {0:'tokens', 5:'concept', 6:'Assertion'}
-cols_with_section = {0:'tokens', 3: 'section', 5:'concept', 6:'Assertion'}
+cols_no_section = {0:'tokens', 5:'Assertion_BIO'}
+cols_with_section = {0:'tokens', 3: 'section', 5:'Assertion_BIO'}
 
-print("\n\n============================\n base \n============================\n")
-train_negation(name = 'base-adam', 
+print("\n\n============================\n No sections - nadam\n============================\n")
+train_negation(name = 'no-section-nadam', 
                columns = cols_no_section, 
                force_create_new_embedding = True, 
-               optimizer = 'adam',
+               optimizer = 'nadam',
                section_filter_level = None)
 
-# print("\n\n============================\n section adam \n============================\n")
-# train_negation(name = 'section-adam', 
-#                columns = cols_with_section, 
-#                force_create_new_embedding = True, 
-#                optimizer = 'adam',
-#                section_filter_level = None)
+print("\n\n============================\n No sections - adadelta\n============================\n")
+train_negation(name = 'no-section-adadelta', 
+               columns = cols_no_section, 
+               force_create_new_embedding = False, 
+               optimizer = 'adadelta',
+               section_filter_level = None)
 
-print("\n\n============================\n specific for highly-negated sections \n============================\n")
-train_negation(name = 'highly-negated-adam', 
+print("\n\n============================\n No sections - adagrad\n============================\n")
+train_negation(name = 'no-section-adagrad', 
+               columns = cols_no_section, 
+               force_create_new_embedding = False, 
+               optimizer = 'adagrad',
+               section_filter_level = None)
+
+print("\n\n============================\n No sections - nadam\n============================\n")
+train_negation(name = 'one-model-with-section-nadam', 
                columns = cols_with_section, 
                force_create_new_embedding = True, 
-               optimizer = 'adam',
-               section_filter_level = "high")
+               optimizer = 'nadam',
+               section_filter_level = None)
 
-print("\n\n============================\n specific for lowly-negated sections \n============================\n")
-train_negation(name = 'lowly-negated-adam', 
+print("\n\n============================\n No sections - adadelta\n============================\n")
+train_negation(name = 'one-model-with-section-adadelta', 
                columns = cols_with_section, 
-               force_create_new_embedding = True, 
-               optimizer = 'adam',
-               section_filter_level = "low")
+               force_create_new_embedding = False, 
+               optimizer = 'adadelta',
+               section_filter_level = None)
+
+print("\n\n============================\n No sections - adagrad\n============================\n")
+train_negation(name = 'one-model-with-section-adagrad', 
+               columns = cols_with_section, 
+               force_create_new_embedding = False, 
+               optimizer = 'adagrad',
+               section_filter_level = None)
+
+
+
+
+
