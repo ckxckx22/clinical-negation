@@ -26,7 +26,7 @@ def conllWrite(outputPath, sentences, headers):
         fOut.write("\n")
         
         
-def readCoNLL(inputPath, cols, commentSymbol=None, valTransformation=None):
+def readCoNLL(inputPath, cols, commentSymbol=None, valTransformation=None, input_text=""):
     """
     Reads in a CoNLL file
     """
@@ -37,8 +37,14 @@ def readCoNLL(inputPath, cols, commentSymbol=None, valTransformation=None):
     sentence = {name: [] for name in sentenceTemplate.keys()}
     
     newData = False
-    
-    for line in open(inputPath):
+
+    if os.path.exists(inputPath):
+        with open(inputPath, 'r') as f:
+            lines = f.readlines(f)
+    else:
+        lines = input_text.split('\n')
+
+    for line in lines:
         line = line.strip()
         if len(line) == 0 or (commentSymbol != None and line.startswith(commentSymbol)):
             if newData:      
