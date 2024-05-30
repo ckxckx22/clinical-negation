@@ -9,6 +9,7 @@ import argparse
 from util.preprocessing import readCoNLL, createMatrices, addCharInformation, addCasingInformation
 from neuralnets.BiLSTM import BiLSTM
 import os
+import re
 from util.casxmi2CONLL import FormatConvertor
 from util.preprocessing import section_filter
 import sys
@@ -72,7 +73,7 @@ for modelName in lstmModel.models:
     # correctTags[modelName] = [[label for label in sentences[idx][lstmModel.labelKeys[modelName]]] 
     #                         for idx in range(len(sentences))]
 
-# :: Output to stdout ::
+
 res = []
 for sentenceIdx in range(len(sentences)):
     tokens = sentences[sentenceIdx]['tokens']
@@ -82,11 +83,18 @@ for sentenceIdx in range(len(sentences)):
         for modelName in sorted(predTags.keys()):
             # tags_to_print.append(correctTags[modelName][sentenceIdx][tokenIdx])
             tags_to_print.append(predTags[modelName][sentenceIdx][tokenIdx])
-            # tags_to_print.append(correctTags[modelName][sentenceIdx][tokenIdx])
 
-        res.append("%s\t%s" % (tokens[tokenIdx], "\t".join(tags_to_print)))
+        res.append("\t".join(tags_to_print))
     res.append("")
-    
-with open("results/GCSpredictions/" + args.gcs_phrase_type + ".txt", "w") as f:
-    f.writelines([line + "\n" for line in res])
 
+splitted_input = input_conll.split('\n')
+if len(splitted_input) > len(res):
+    assert bool(re.fullmatch(r'\s+', splitted_input[-1]))
+elif len(input_conll.split('\n')) < len(res): 
+    assert bool(re.fullmatch(r'\s+', res[-1]))
+
+outputs = []
+for i in range(min(len(splitted_input), len(res))):
+    outputs.append('\t'.join([splitted_input[i], res[i]]) )
+with open("results/GCSpredictions/" + args.gcs_phrase_type + ".txt", "w") as f:
+    f.writelines([line + "\n" for line in outputs])
